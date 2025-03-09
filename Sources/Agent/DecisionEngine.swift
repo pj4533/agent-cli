@@ -11,6 +11,12 @@ class DecisionEngine {
     private let openAIService: OpenAIService
     private let logger = AgentLogger(category: "Decision")
     
+    /// Rules that govern agent behavior in the world
+    private let worldRules = [
+        "You cannot pass through water or mountains",
+        "You can move one tile in any direction"
+    ]
+    
     init(openAIService: OpenAIService) {
         self.openAIService = openAIService
     }
@@ -24,13 +30,19 @@ class DecisionEngine {
         log("Current position: (\(response.currentLocation.x), \(response.currentLocation.y)) - \(response.currentLocation.type)", verbose: true)
         log("Surroundings: \(response.surroundings.tiles.count) tiles, \(response.surroundings.agents.count) agents", verbose: true)
         
-        // Create system and user prompts
-        let systemPrompt = """
-        You are an explorer in a new world. 
-        Try to see as much of the world as you can, without revisiting areas you have already visited.
-
-        You cannot pass through water or mountains, but you can move one tile in any direction.
-        """
+        // Create system prompt with world rules
+        var systemPromptBuilder = [
+            "You are an explorer in a new world.",
+            "Try to see as much of the world as you can, without revisiting areas you have already visited.",
+            ""
+        ]
+        
+        // Add world rules to the system prompt
+        for rule in worldRules {
+            systemPromptBuilder.append("- \(rule)")
+        }
+        
+        let systemPrompt = systemPromptBuilder.joined(separator: "\n")
         
         // Create a user prompt with the current observation
         let encoder = JSONEncoder()
