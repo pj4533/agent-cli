@@ -28,18 +28,21 @@ Extend the CLI to connect via TCP to the provided `host:port`.
 Show updated code. Include any new files or updates to main. 
 ```
 
-### **Prompt 3: Personality & Memory Setup**
+### **Prompt 3: Memory Setup**
 
 ```text
-Add personality and memory:
+Add long term memory:
 
-1. Read `.agentTraits` (assume it's in the same folder) and store lines in an array. 
-2. Create a simple SQLite database "AgentMemory.db" with a table `Memories`:
-   (unique_id TEXT, memoryType TEXT, timestamp INT, text_content TEXT, links TEXT).
-3. Add placeholders for Pinecone operations, e.g. `func storeEmbedding(_ text: String) {}`. 
-4. No real embedding logic yet. Just stubs. 
-
-Provide code that sets up this DB (create table if not exists), and reads the traits. 
+1. Create a simple SQLite database "AgentMemory_<unique timestamp>.db" with a table `Memories`:
+   (unique_id TEXT, memoryType TEXT, timestamp INT, text_content TEXT, links TEXT)
+2. The database is created new everytime the agent is launched.
+3. Add AgentMemory*.db to .gitignore
+4. Add a new file `MemoryEngine` whose job it will be to generate memories.
+5. After deciding an action, call the function generateMemories() on MemoryEngine
+6. generateMemories(fromReasoning:) will generate one or more memories of type 'action', based on the reasoning given by the LLM for the action choice.
+7. generateMemories() will call OpenAI API with a system prompt of: "You take input from the user and generate memories". The USER prompt should be something like: "Generate one or more short, one sentence memories, based on this reasoning: <reasoning from action LLM> Respond as JSON `{"memories": ["I see water in the distance", "I want to be close to the water"]}`
+8. Make sure to tell OpenAI to use `json_object` as the response format
+9. Make sure to log each memory saved.
 ```
 
 ### **Prompt 4: Receiving Server Messages & Decision Loop**

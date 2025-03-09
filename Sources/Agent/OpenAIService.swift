@@ -57,8 +57,9 @@ actor OpenAIService {
     /// - Parameters:
     ///   - systemPrompt: The system prompt for the chat
     ///   - userPrompt: The user prompt for the chat
+    ///   - jsonResponseFormat: Whether to request a JSON response format
     /// - Returns: The content of the model's response
-    func chatCompletion(systemPrompt: String, userPrompt: String) async throws -> String {
+    func chatCompletion(systemPrompt: String, userPrompt: String, jsonResponseFormat: Bool = false) async throws -> String {
         log("🤖 Sending chat completion request to OpenAI", verbose: true)
         
         // Log the prompts when verbose
@@ -85,10 +86,14 @@ actor OpenAIService {
         
         log("Including \(messages.count - 1) previous messages in context", verbose: true)
         
+        // Only set response_format if JSON is requested
+        let responseFormat = jsonResponseFormat ? 
+            ChatCompletionRequest.ResponseFormat(type: "json_object") : nil
+        
         let requestBody = ChatCompletionRequest(
             model: "gpt-4o",
             messages: messages,
-            response_format: ChatCompletionRequest.ResponseFormat(type: "json_object")
+            response_format: responseFormat
         )
         
         // Encode the request

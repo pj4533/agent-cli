@@ -92,3 +92,4 @@ iOSInjectionProject/
 .aider*
 .env
 .agentTraits
+AgentMemory_*.db

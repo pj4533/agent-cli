@@ -10,6 +10,7 @@ struct GPTActionResponse: Codable {
 /// Class responsible for making agent decisions
 class DecisionEngine {
     private let openAIService: OpenAIService
+    private let memoryEngine: MemoryEngine
     private let logger = AgentLogger(category: "Decision")
     
     /// Rules that govern agent behavior in the world
@@ -22,8 +23,9 @@ class DecisionEngine {
     /// Agent traits that define its personality and preferences
     private var agentTraits: [String] = []
     
-    init(openAIService: OpenAIService) {
+    init(openAIService: OpenAIService, memoryEngine: MemoryEngine) {
         self.openAIService = openAIService
+        self.memoryEngine = memoryEngine
         loadAgentTraits()
     }
     
@@ -62,7 +64,7 @@ class DecisionEngine {
         log("Current position: (\(response.currentLocation.x), \(response.currentLocation.y)) - \(response.currentLocation.type)", verbose: true)
         log("Surroundings: \(response.surroundings.tiles.count) tiles, \(response.surroundings.agents.count) agents", verbose: true)
         
-        // Create system prompt with agent traits and world rules
+        // Create system prompt with agent traits, memories, and world rules
         var systemPromptBuilder = ["You are an explorer in a new world."]
         
         // Add agent traits if available
@@ -71,6 +73,16 @@ class DecisionEngine {
             systemPromptBuilder.append("You are guided by these traits:")
             for trait in agentTraits {
                 systemPromptBuilder.append("- \(trait)")
+            }
+        }
+        
+        // Add relevant memories
+        let memories = await memoryEngine.getRelevantMemories(forContext: "exploration", limit: 5)
+        if !memories.isEmpty {
+            systemPromptBuilder.append("")
+            systemPromptBuilder.append("You have these recent memories:")
+            for memory in memories {
+                systemPromptBuilder.append("- \(memory.textContent)")
             }
         }
         
@@ -113,8 +125,12 @@ class DecisionEngine {
         let decisionStartTime = Date()
         log("Starting LLM request for movement decision", verbose: true)
         
-        // Get a response from the OpenAI API
-        let jsonResponse = try await openAIService.chatCompletion(systemPrompt: systemPrompt, userPrompt: userPrompt)
+        // Get a response from the OpenAI API with JSON format
+        let jsonResponse = try await openAIService.chatCompletion(
+            systemPrompt: systemPrompt, 
+            userPrompt: userPrompt,
+            jsonResponseFormat: true
+        )
         
         // Log timing information
         let decisionDuration = Date().timeIntervalSince(decisionStartTime)
@@ -140,6 +156,15 @@ class DecisionEngine {
             logger.info("🧠 AI's reasoning: \(gptAction.reason)")
             log("Moving to position: (\(gptAction.targetTile.x), \(gptAction.targetTile.y))", verbose: true)
             log("Reason: \(gptAction.reason)", verbose: true)
+            
+            // Generate memories based on reasoning in the background
+            // We won't await this task as it's not critical for the action result
+            let reason = gptAction.reason // Capture the value outside the Task
+            let memEngine = memoryEngine // Capture explicitly outside the task
+            Task.detached {
+                // Use a detached task with explicitly captured variables
+                await memEngine.generateMemories(fromReasoning: reason)
+            }
             
             // Convert to AgentAction - don't send reason to server
             return AgentAction(

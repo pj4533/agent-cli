@@ -50,8 +50,11 @@ struct AgentCommand: AsyncParsableCommand {
         // Set up OpenAI service if needed
         let openAIService = try setupOpenAIService()
         
+        // Initialize memory engine
+        let memoryEngine = MemoryEngine(openAIService: openAIService)
+        
         // Configure decision engine
-        let decisionEngine = DecisionEngine(openAIService: openAIService)
+        let decisionEngine = DecisionEngine(openAIService: openAIService, memoryEngine: memoryEngine)
         
         // Set up network connection
         try await connectAndProcessData(decisionEngine: decisionEngine)
