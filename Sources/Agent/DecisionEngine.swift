@@ -17,8 +17,38 @@ class DecisionEngine {
         "You can move one tile in any direction"
     ]
     
+    /// Agent traits that define its personality and preferences
+    private var agentTraits: [String] = []
+    
     init(openAIService: OpenAIService) {
         self.openAIService = openAIService
+        loadAgentTraits()
+    }
+    
+    /// Load agent traits from .agentTraits file if it exists
+    private func loadAgentTraits() {
+        let fileManager = FileManager.default
+        let traitsFilePath = ".agentTraits"
+        
+        if fileManager.fileExists(atPath: traitsFilePath) {
+            do {
+                let traitsContent = try String(contentsOfFile: traitsFilePath, encoding: .utf8)
+                let traits = traitsContent.components(separatedBy: .newlines)
+                    .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                
+                agentTraits = traits
+                logger.info("Agent traits loaded: \(traits.count) traits found")
+                for trait in traits {
+                    log("Agent trait: \(trait)", verbose: true)
+                }
+            } catch {
+                logger.error("Failed to read agent traits file: \(error.localizedDescription)")
+                log("❌ Error reading .agentTraits file: \(error.localizedDescription)", verbose: true)
+            }
+        } else {
+            logger.info("No agent traits file found (.agentTraits)")
+            log("No agent traits file found. Using default personality.", verbose: true)
+        }
     }
     
     /// Determine the next action based on observation using LLM
@@ -30,17 +60,28 @@ class DecisionEngine {
         log("Current position: (\(response.currentLocation.x), \(response.currentLocation.y)) - \(response.currentLocation.type)", verbose: true)
         log("Surroundings: \(response.surroundings.tiles.count) tiles, \(response.surroundings.agents.count) agents", verbose: true)
         
-        // Create system prompt with world rules
-        var systemPromptBuilder = [
-            "You are an explorer in a new world.",
-            "Try to see as much of the world as you can, without revisiting areas you have already visited.",
-            ""
-        ]
+        // Create system prompt with agent traits and world rules
+        var systemPromptBuilder = ["You are an explorer in a new world."]
         
-        // Add world rules to the system prompt
+        // Add agent traits if available
+        if !agentTraits.isEmpty {
+            systemPromptBuilder.append("")
+            systemPromptBuilder.append("You are guided by these traits:")
+            for trait in agentTraits {
+                systemPromptBuilder.append("- \(trait)")
+            }
+        }
+        
+        // Add world rules
+        systemPromptBuilder.append("")
+        systemPromptBuilder.append("The world has these rules you must follow:")
         for rule in worldRules {
             systemPromptBuilder.append("- \(rule)")
         }
+        
+        // Add exploration goal
+        systemPromptBuilder.append("")
+        systemPromptBuilder.append("Try to see as much of the world as you can, without revisiting areas you have already visited.")
         
         let systemPrompt = systemPromptBuilder.joined(separator: "\n")
         
