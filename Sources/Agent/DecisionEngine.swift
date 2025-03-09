@@ -1,5 +1,11 @@
 import Foundation
 
+/// Structure for OpenAI's action response
+struct GPTActionResponse: Codable {
+    let action: String
+    let targetTile: Coordinate
+}
+
 /// Class responsible for making agent decisions
 class DecisionEngine {
     private let openAIService: OpenAIService
@@ -11,12 +17,92 @@ class DecisionEngine {
     
     /// Determine the next action based on observation using LLM
     func decideNextAction(basedOn response: ServerResponse) async throws -> AgentAction {
-        log("🤖 Using LLM to decide next action at time step \(response.timeStep)", verbose: true)
-        logger.info("Asking AI for next move... 🧠")
+        log("🧠 Deciding next action based on observation at time step \(response.timeStep)", verbose: true)
+        logger.info("Analyzing current state and making a decision... 🧠")
         
-        // Get action from OpenAI
-        let action = try await openAIService.decideNextAction(observation: response)
+        // Log the current agent position and surroundings
+        log("Current position: (\(response.currentLocation.x), \(response.currentLocation.y)) - \(response.currentLocation.type)", verbose: true)
+        log("Surroundings: \(response.surroundings.tiles.count) tiles, \(response.surroundings.agents.count) agents", verbose: true)
         
+        // Create system and user prompts
+        let systemPrompt = """
+        You are an explorer in a new world. 
+        Try to see as much of the world as you can, without revisiting areas you have already visited.
+
+        You cannot pass through water or mountains, but you can move one tile in any direction.
+        """
+        
+        // Create a user prompt with the current observation
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let observationData = try encoder.encode(response)
+        let observationString = String(data: observationData, encoding: .utf8) ?? "Unable to encode observation"
+        
+        let userPrompt = """
+        Decide where to move next.
+        
+        Output your next move using JSON formatted like this:
+        {"action": "move", "targetTile": {"x": 1, "y": 2}}
+        
+        Current Observation:
+        \(observationString)
+        """
+        
+        // Mark the start of LLM decision making 
+        let decisionStartTime = Date()
+        log("Starting LLM request for movement decision", verbose: true)
+        
+        // Get a response from the OpenAI API
+        let jsonResponse = try await openAIService.chatCompletion(systemPrompt: systemPrompt, userPrompt: userPrompt)
+        
+        // Log timing information
+        let decisionDuration = Date().timeIntervalSince(decisionStartTime)
+        log("Decision process took \(String(format: "%.2f", decisionDuration)) seconds", verbose: true)
+        
+        // Parse the response and create an action
+        let action = parseAndCreateAction(from: jsonResponse, fallbackLocation: response.currentLocation)
+        
+        // Validate the action
+        return validateAction(action, basedOn: response)
+    }
+    
+    /// Parse the AI response and create an agent action
+    private func parseAndCreateAction(from jsonResponse: String, fallbackLocation: Location) -> AgentAction {
+        // Parse the JSON response
+        let responseData = jsonResponse.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        
+        do {
+            let gptAction = try decoder.decode(GPTActionResponse.self, from: responseData)
+            
+            // Log the decision that was made
+            log("Moving to position: (\(gptAction.targetTile.x), \(gptAction.targetTile.y))", verbose: true)
+            
+            // Convert to AgentAction
+            return AgentAction(
+                action: .move,
+                targetTile: gptAction.targetTile,
+                message: nil
+            )
+        } catch {
+            // Log parsing error
+            log("❌ Failed to decode OpenAI response: \(error.localizedDescription)", verbose: true)
+            log("📄 Raw response: \(jsonResponse)", verbose: true)
+            
+            // Fallback to a simple action (stay in place)
+            logger.error("Failed to parse AI response, staying in place")
+            log("Using fallback action: staying in place at (\(fallbackLocation.x), \(fallbackLocation.y))", verbose: true)
+            
+            return AgentAction(
+                action: .move,
+                targetTile: Coordinate(x: fallbackLocation.x, y: fallbackLocation.y),
+                message: "Staying in place due to parsing error."
+            )
+        }
+    }
+    
+    /// Validate action to ensure it's legal
+    private func validateAction(_ action: AgentAction, basedOn response: ServerResponse) -> AgentAction {
         // Verify that the target tile is valid (adjacent and not water)
         if let targetTile = action.targetTile {
             let currentX = response.currentLocation.x
@@ -27,15 +113,15 @@ class DecisionEngine {
             // Check if the move is adjacent
             let isAdjacent = (dx == 1 && dy == 0) || (dx == 0 && dy == 1) || (dx == 0 && dy == 0)
             
-            // Find if the target is water
+            // Find if the target is water or mountain
             let targetTileInfo = response.surroundings.tiles.first { 
                 $0.x == targetTile.x && $0.y == targetTile.y 
             }
-            let isWater = targetTileInfo?.type == .water
+            let isInvalidTerrain = targetTileInfo?.type == .water || targetTileInfo?.type == .mountain
             
-            if !isAdjacent || isWater {
+            if !isAdjacent || isInvalidTerrain {
                 log("⚠️ LLM suggested invalid move to (\(targetTile.x), \(targetTile.y))", verbose: true)
-                logger.error("Invalid move suggested by LLM: \(targetTile.x), \(targetTile.y). Not adjacent or water.")
+                logger.error("Invalid move suggested: \(targetTile.x), \(targetTile.y). Not adjacent or invalid terrain.")
                 
                 // Create a simple stay-in-place action as fallback
                 return AgentAction(
