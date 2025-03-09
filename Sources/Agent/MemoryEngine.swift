@@ -130,21 +130,21 @@ actor MemoryEngine {
     
     // MARK: - Memory Generation
     
-    /// Generates memories based on the reasoning provided by the LLM
+    /// Generates a single memory based on the reasoning provided by the LLM
     func generateMemories(fromReasoning reasoning: String) async {
-        log("🧠 Generating memories based on LLM reasoning", verbose: true)
+        log("🧠 Generating a memory based on LLM reasoning", verbose: true)
         
         // Create system prompt for memory generation
-        let systemPrompt = "You take input from the user and generate memories. Create short, one-sentence memories based on the reasoning provided."
+        let systemPrompt = "You take input from the user and generate a memory. Create a single short, one-sentence memory based on the reasoning provided."
         
         // Create user prompt with the reasoning
         let userPrompt = """
-        Generate one or more short, one sentence memories, based on this reasoning:
+        Generate a single short, one sentence memory, based on this reasoning:
         
         \(reasoning)
         
         Respond as JSON in the following format:
-        {"memories": ["I see water in the distance", "I want to be close to the water"]}
+        {"memories": ["I see water in the distance"]}
         
         Focus only on factual observations and genuine preferences/intentions.
         """
@@ -163,16 +163,17 @@ actor MemoryEngine {
             
             let memoryResponse = try decoder.decode(MemoryGenerationResponse.self, from: responseData)
             
-            // Save each memory
-            for memoryText in memoryResponse.memories {
+            // Only save the first memory
+            if let memoryText = memoryResponse.memories.first {
                 let memory = Memory(
                     memoryType: "action",
                     textContent: memoryText
                 )
                 saveMemory(memory)
+                log("✅ Successfully generated a memory: \(memoryText)", verbose: true)
+            } else {
+                log("⚠️ No memories were generated from the reasoning", verbose: true)
             }
-            
-            log("✅ Successfully generated \(memoryResponse.memories.count) memories", verbose: true)
         } catch {
             logger.error("Failed to generate memories: \(error.localizedDescription)")
             log("❌ Error generating memories: \(error.localizedDescription)", verbose: true)
