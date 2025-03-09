@@ -89,16 +89,19 @@ class DecisionEngine {
         let observationData = try encoder.encode(response)
         let observationString = String(data: observationData, encoding: .utf8) ?? "Unable to encode observation"
         
+        // Create a reminder of the rules for the user prompt
+        var rulesReminder = "Remember:"
+        for rule in worldRules {
+            rulesReminder += "\n- \(rule)"
+        }
+        
         let userPrompt = """
-        Decide where to move next. You can only move to one of the 8 adjacent tiles.
+        Decide where to move next.
         
         Output your next move using JSON formatted like this:
         {"action": "move", "targetTile": {"x": 1, "y": 2}, "reason": "Brief explanation of why you chose this move."}
         
-        Remember:
-        - You can only move to one of the 8 adjacent tiles (horizontal, vertical, or diagonal)
-        - You must move exactly one tile at a time
-        - You cannot move to water or mountain tiles
+        \(rulesReminder)
         
         Include a clear reason field explaining your decision-making process based on your traits and the current surroundings.
         
