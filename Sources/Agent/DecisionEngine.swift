@@ -80,10 +80,6 @@ class DecisionEngine {
             systemPromptBuilder.append("- \(rule)")
         }
         
-        // Add exploration goal
-        systemPromptBuilder.append("")
-        systemPromptBuilder.append("Try to see as much of the world as you can, without revisiting areas you have already visited.")
-        
         let systemPrompt = systemPromptBuilder.joined(separator: "\n")
         
         // Create a user prompt with the current observation
