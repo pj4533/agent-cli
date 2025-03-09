@@ -36,9 +36,6 @@ struct AgentCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Path to .env file 📄")
     var envFile: String = ".env"
     
-    @Flag(name: .long, help: "Use random movement instead of LLM 🎲")
-    var randomMovement: Bool = false
-    
     @Flag(name: .long, help: "Enable verbose logging output 📝")
     var verbose: Bool = false
     
@@ -74,32 +71,25 @@ struct AgentCommand: AsyncParsableCommand {
         log("🚀 Agent starting up!", verbose: true, forceShow: true)
     }
     
-    /// Set up OpenAI service if using LLM-based decisions
-    private func setupOpenAIService() throws -> OpenAIService? {
-        if randomMovement {
-            log("🎲 Random movement enabled", verbose: true)
+    /// Set up OpenAI service for LLM-based decisions
+    private func setupOpenAIService() throws -> OpenAIService {
+        // Get OpenAI API key from environment
+        guard let apiKey = EnvironmentService.getEnvironmentVariable("OPENAI_API_KEY") else {
+            log("❌ OPENAI_API_KEY not found in environment or .env file", verbose: true)
             let logger = AgentLogger(category: "Agent")
-            logger.info("Random movement enabled 🎲")
-            return nil
-        } else {
-            // Get OpenAI API key from environment
-            guard let apiKey = EnvironmentService.getEnvironmentVariable("OPENAI_API_KEY") else {
-                log("❌ OPENAI_API_KEY not found in environment or .env file", verbose: true)
-                let logger = AgentLogger(category: "Agent")
-                logger.error("OPENAI_API_KEY environment variable is required")
-                logger.error("Please add it to your .env file or set it in your environment")
-                throw NSError(domain: "AgentCommand", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: "OPENAI_API_KEY not found"
-                ])
-            }
-            
-            // Initialize OpenAI service
-            let service = OpenAIService(apiKey: apiKey)
-            log("🧠 LLM-based decision making enabled", verbose: true)
-            let logger = AgentLogger(category: "Agent")
-            logger.info("LLM-based decision making enabled 🧠")
-            return service
+            logger.error("OPENAI_API_KEY environment variable is required")
+            logger.error("Please add it to your .env file or set it in your environment")
+            throw NSError(domain: "AgentCommand", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "OPENAI_API_KEY not found"
+            ])
         }
+        
+        // Initialize OpenAI service
+        let service = OpenAIService(apiKey: apiKey)
+        log("🧠 LLM-based decision making enabled", verbose: true)
+        let logger = AgentLogger(category: "Agent")
+        logger.info("LLM-based decision making enabled 🧠")
+        return service
     }
     
     /// Connect to the server and process data
@@ -214,7 +204,7 @@ struct AgentCommand: AsyncParsableCommand {
         let action: AgentAction
         do {
             // Use decision engine to determine next action
-            action = try await decisionEngine.decideNextAction(basedOn: response, useRandom: randomMovement)
+            action = try await decisionEngine.decideNextAction(basedOn: response)
         } catch {
             log("❌ Decision error: \(error.localizedDescription), cannot continue", verbose: true)
             logger.error("Decision making failed: \(error.localizedDescription)")
