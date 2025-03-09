@@ -16,7 +16,7 @@ class DecisionEngine {
     private let worldRules = [
         "You cannot pass through water or mountains",
         "You can only move to one of the 8 adjacent tiles (up, down, left, right, or diagonals)",
-        "You must move exactly one tile at a time"
+        "Each action you can move a single tile"
     ]
     
     /// Agent traits that define its personality and preferences

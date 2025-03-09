@@ -42,6 +42,8 @@ actor OpenAIService {
     private let apiKey: String
     private let baseURL = "https://api.openai.com/v1/chat/completions"
     private let logger = AgentLogger(category: "OpenAI")
+    private var conversationHistory: [ChatMessage] = []
+    private let defaultMemorySize = 5
     
     // MARK: - Initialization
     init(apiKey: String) {
@@ -63,11 +65,25 @@ actor OpenAIService {
         log("SYSTEM_PROMPT: \(systemPrompt)", verbose: true)
         log("USER_PROMPT: \(userPrompt)", verbose: true)
         
-        // Create the request
-        let messages = [
-            ChatMessage(role: "system", content: systemPrompt),
-            ChatMessage(role: "user", content: userPrompt)
-        ]
+        // Add current user message to conversation history
+        let userMessage = ChatMessage(role: "user", content: userPrompt)
+        conversationHistory.append(userMessage)
+        
+        // Get memory size from environment or use default
+        let memorySize = getMemorySize()
+        log("Using thread memory size: \(memorySize)", verbose: true)
+        
+        // Create the request with system prompt and recent conversation history
+        var messages = [ChatMessage(role: "system", content: systemPrompt)]
+        
+        // Add recent conversation messages (limited by memory size)
+        if conversationHistory.count > 0 {
+            let startIndex = max(0, conversationHistory.count - (memorySize * 2))
+            let recentMessages = Array(conversationHistory[startIndex..<conversationHistory.count])
+            messages.append(contentsOf: recentMessages)
+        }
+        
+        log("Including \(messages.count - 1) previous messages in context", verbose: true)
         
         let requestBody = ChatCompletionRequest(
             model: "gpt-4o",
@@ -145,7 +161,21 @@ actor OpenAIService {
         log("RESPONSE_CONTENT: \(choice.message.content)", verbose: true)
         log("FINISH_REASON: \(choice.finish_reason)", verbose: true)
         
+        // Add assistant's response to conversation history
+        conversationHistory.append(choice.message)
+        
         log("✅ Received response from OpenAI API", verbose: true)
         return choice.message.content
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Get the memory size from environment or use default
+    private func getMemorySize() -> Int {
+        if let memorySizeStr = EnvironmentService.getEnvironmentVariable("THREAD_MEMORY_SIZE"),
+           let memorySize = Int(memorySizeStr) {
+            return memorySize
+        }
+        return defaultMemorySize
     }
 }
