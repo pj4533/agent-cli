@@ -4,6 +4,7 @@ import Foundation
 struct GPTActionResponse: Codable {
     let action: String
     let targetTile: Coordinate
+    let reason: String
 }
 
 /// Class responsible for making agent decisions
@@ -95,7 +96,9 @@ class DecisionEngine {
         Decide where to move next.
         
         Output your next move using JSON formatted like this:
-        {"action": "move", "targetTile": {"x": 1, "y": 2}}
+        {"action": "move", "targetTile": {"x": 1, "y": 2}, "reason": "Brief explanation of why you chose this move."}
+        
+        Include a clear reason field explaining your decision-making process based on your traits and the current surroundings.
         
         Current Observation:
         \(observationString)
@@ -128,10 +131,12 @@ class DecisionEngine {
         do {
             let gptAction = try decoder.decode(GPTActionResponse.self, from: responseData)
             
-            // Log the decision that was made
+            // Log the decision and reasoning
+            logger.info("🧠 AI's reasoning: \(gptAction.reason)")
             log("Moving to position: (\(gptAction.targetTile.x), \(gptAction.targetTile.y))", verbose: true)
+            log("Reason: \(gptAction.reason)", verbose: true)
             
-            // Convert to AgentAction
+            // Convert to AgentAction - don't send reason to server
             return AgentAction(
                 action: .move,
                 targetTile: gptAction.targetTile,
