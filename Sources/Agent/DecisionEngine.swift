@@ -15,7 +15,8 @@ class DecisionEngine {
     /// Rules that govern agent behavior in the world
     private let worldRules = [
         "You cannot pass through water or mountains",
-        "You can move one tile in any direction"
+        "You can only move to one of the 8 adjacent tiles (up, down, left, right, or diagonals)",
+        "You must move exactly one tile at a time"
     ]
     
     /// Agent traits that define its personality and preferences
@@ -89,10 +90,15 @@ class DecisionEngine {
         let observationString = String(data: observationData, encoding: .utf8) ?? "Unable to encode observation"
         
         let userPrompt = """
-        Decide where to move next.
+        Decide where to move next. You can only move to one of the 8 adjacent tiles.
         
         Output your next move using JSON formatted like this:
         {"action": "move", "targetTile": {"x": 1, "y": 2}, "reason": "Brief explanation of why you chose this move."}
+        
+        Remember:
+        - You can only move to one of the 8 adjacent tiles (horizontal, vertical, or diagonal)
+        - You must move exactly one tile at a time
+        - You cannot move to water or mountain tiles
         
         Include a clear reason field explaining your decision-making process based on your traits and the current surroundings.
         
@@ -164,8 +170,9 @@ class DecisionEngine {
             let dx = abs(targetTile.x - currentX)
             let dy = abs(targetTile.y - currentY)
             
-            // Check if the move is adjacent
-            let isAdjacent = (dx == 1 && dy == 0) || (dx == 0 && dy == 1) || (dx == 0 && dy == 0)
+            // Check if the move is to one of the 8 adjacent tiles or staying in place
+            // Adjacent means maximum distance of 1 in any direction (including diagonals)
+            let isAdjacent = dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
             
             // Find if the target is water or mountain
             let targetTileInfo = response.surroundings.tiles.first { 
@@ -175,7 +182,12 @@ class DecisionEngine {
             
             if !isAdjacent || isInvalidTerrain {
                 log("⚠️ LLM suggested invalid move to (\(targetTile.x), \(targetTile.y))", verbose: true)
-                logger.error("Invalid move suggested: \(targetTile.x), \(targetTile.y). Not adjacent or invalid terrain.")
+                
+                if !isAdjacent {
+                    logger.error("Invalid move: (\(targetTile.x), \(targetTile.y)) - Not one of the 8 adjacent tiles")
+                } else {
+                    logger.error("Invalid move: (\(targetTile.x), \(targetTile.y)) - Cannot move to \(targetTileInfo?.type.rawValue ?? "unknown") terrain")
+                }
                 
                 // Create a simple stay-in-place action as fallback
                 return AgentAction(
