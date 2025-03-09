@@ -24,5 +24,6 @@ swift build -c release
 - **Organization**: Group related functionality with MARK: comments
 - **Architecture**: Create dedicated services for specific functionality
 - **Arguments**: Use SwiftArgumentParser for command-line arguments
+- **Testing**: Use SwiftTesting framework, NEVER use XCTest. Documentation on SwiftTesting is in swifttesting_documentation.md
 
 Always follow existing patterns in the codebase when making modifications.
